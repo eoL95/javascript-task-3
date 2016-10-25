@@ -4,46 +4,29 @@ exports.isStar = true;
 var START_OF_WEEK = Date.UTC(2016, 1, 1, 0, 0);
 var MINUTES_IN_DAY = 24 * 60;
 var END_OF_WEDNESDAY = 24 * 60 * 3;
-var DAYS = {
-    'ПН': 1,
-    'ВТ': 2,
-    'СР': 3,
-    'ЧТ': 4,
-    'ПТ': 5,
-    'СБ': 6,
-    'ВС': 7
-};
+var MS_IN_MINUTE = 1000 * 60;
+var DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 
 /**
  * Для вывода времени, если часы или минуты меньше 10
- * @param {Integer} time
- * @returns {String}
+ * @param {Integer} count - количество часов или минут
+ * @returns {String} Например '01' если задано число 1
  */
-function showTime(time) {
-    if (time < 10) {
-        return '0' + time.toString();
+function formatTime(count) {
+    if (count < 10) {
+        return '0' + count.toString();
     }
 
-    return time.toString();
-}
-
-function toMinutes(utcDate) {
-
-    return utcDate / (1000 * 60);
-}
-
-function makeDate(reseivedDate) {
-
-    return Date.UTC(2016, 1, reseivedDate.day, reseivedDate.hours, reseivedDate.minutes);
+    return count.toString();
 }
 
 /**
  * @param {String} time
  * @returns {Integer} Сдвиг времени
  */
-function getUtc(time) {
+function getTimeZone(time) {
 
-    return Number(time[time.match(/\+\d/).index + 1]);
+    return Number(time.split('+')[1].slice(-1));
 }
 
 /**
@@ -51,112 +34,85 @@ function getUtc(time) {
  * @returns {Integer} Номер дня недели в строке
  */
 function parseDay(time) {
-    var dayIndex;
-    var keys = Object.keys(DAYS);
-    for (var i = 0; i < keys.length; i++) {
-        if (time.indexOf(keys[i]) !== -1) {
-            dayIndex = time.indexOf(keys[i]);
-        }
-    }
-    if (isNaN(dayIndex)) {
+    var day = time.split(' ')[0];
+    var dayIndex = DAYS.indexOf(day);
+    if (dayIndex === -1) {
         return 1;
     }
 
-    return DAYS[time[dayIndex] + time[dayIndex + 1]];
+    return dayIndex + 1;
 }
 
 /**
 * @param {String} time - Строка в которой написано время
-* @param {Integer} utc - Временная зона банка
-* @returns {Object} {day, hours, minutes}
+* @param {Integer} bankTimeZone - Временная зона банка
+* @returns {Integer} Количество минут, прошедших с понедельника
 */
-function getDate(time, utc) {
-    var shift = getUtc(time);
-    var hours = Number(time.match(/\d\d:\d\d/)[0].split(':')[0]);
-    var minutes = Number(time.match(/\d\d:\d\d/)[0].split(':')[1]);
+function minutesPassed(time, bankTimeZone) {
+    var timeZone = getTimeZone(time);
+    var parsedTime = time.match(/\d\d:\d\d/)[0];
+    var hours = Number(parsedTime.split(':')[0]) - timeZone + bankTimeZone;
+    var minutes = Number(parsedTime.split(':')[1]);
     var day = parseDay(time);
-    hours = hours - shift + utc;
-    if (hours > 23) {
-        hours = hours - 24;
-        day = day + 1;
-    }
-    if (hours < 0) {
-        hours = hours + 24;
-        day = day - 1;
-    }
 
-    return {
-        'day': day,
-        'hours': hours,
-        'minutes': minutes
-    };
-}
-
-/**
-* @param {String} time - Строка в которой написано время
-* @param {Integer} utc - Временная зона банка
-* @returns {Integer} Сколько минут прошло с начала недели
-*/
-function minutesPassed(time, utc) {
-
-    return toMinutes(makeDate(getDate(time, utc)) - START_OF_WEEK);
+    return (Date.UTC(2016, 1, day, hours, minutes) - START_OF_WEEK) / MS_IN_MINUTE;
 }
 
 /**
 * Занятые минуты грабителя записывает нулями
 * @param {Array} robberSchedule - массив объектов(Записано расписание для конкретного вора)
-* @param {Array} busyTime - Изменяемый массив
-* @param {Integer} utc - Временная зона банка
+* @param {Array} busyMinutes - Изменяемый массив
+* @param {Integer} bankTimeZone - Временная зона банка
 */
-function doBusy(robberSchedule, busyTime, utc) {
+function setBusyMinutes(robberSchedule, busyMinutes, bankTimeZone) {
     for (var i = 0; i < robberSchedule.length; i++) {
-        for (var j = minutesPassed(robberSchedule[i].from, utc);
-            j < Math.min(minutesPassed(robberSchedule[i].to, utc), END_OF_WEDNESDAY);
-            j++) {
-            busyTime[j] = 0;
+        var startOfBusy = minutesPassed(robberSchedule[i].from, bankTimeZone);
+        var endOfBusy = Math.min(minutesPassed(robberSchedule[i].to, bankTimeZone),
+                       END_OF_WEDNESDAY);
+        for (var j = startOfBusy; j < endOfBusy; j++) {
+            busyMinutes[j] = 0;
         }
     }
 }
 
 /**
-Зануляет минуты когда банк закрыт
+Зануляет минуты когда банк закрыт. На каждом шаге цикла зануляет минуты
+для понедельника, вторника и среды.
 * @param {Array} workingHours - Время работы банка
-* @param {Array} busyTime - Изменяемый массив
-* @param {Integer} utc - Временная зона банка
+* @param {Array} busyMinutes - Изменяемый массив
+* @param {Integer} bankTimeZone - Временная зона банка
 */
-function doClose(workingHours, busyTime, utc) {
-    var i = 0;
-    for (i = 0; i < minutesPassed(workingHours.from, utc); i++) {
-        busyTime[i] = 0;
-        busyTime[i + MINUTES_IN_DAY] = 0;
-        busyTime[i + MINUTES_IN_DAY * 2] = 0;
+function setCloseMinutes(workingHours, busyMinutes, bankTimeZone) {
+    for (var i = 0; i < minutesPassed(workingHours.from, bankTimeZone); i++) {
+        busyMinutes[i] = 0;
+        busyMinutes[i + MINUTES_IN_DAY] = 0;
+        busyMinutes[i + MINUTES_IN_DAY * 2] = 0;
     }
-    for (i = minutesPassed(workingHours.to, utc); i < MINUTES_IN_DAY; i++) {
-        busyTime[i] = 0;
-        busyTime[i + MINUTES_IN_DAY] = 0;
-        busyTime[i + MINUTES_IN_DAY * 2] = 0;
+    for (var j = minutesPassed(workingHours.to, bankTimeZone); j < MINUTES_IN_DAY; j++) {
+        busyMinutes[j] = 0;
+        busyMinutes[j + MINUTES_IN_DAY] = 0;
+        busyMinutes[j + MINUTES_IN_DAY * 2] = 0;
     }
 }
 
 /**
 * Находит минуты с которых возможно ограбить банк
-* @param {Array} busyTime - массив занятости
+* @param {Array} busyMinutes - массив занятости
 * @param {Integer} duration - длительность ограбления
 * @returns {Array} startMinutes
 */
-function search(busyTime, duration) {
+function searchSuccessMinutes(busyMinutes, duration) {
     var startMinutes = [];
     var count = 0;
-    for (var i = 0; i < busyTime.length; i++) {
-        if (busyTime[i] === 1) {
+    for (var i = 0; i < busyMinutes.length; i++) {
+        if (busyMinutes[i] === 1) {
             count = count + 1;
         } else {
             count = 0;
         }
         if (count === duration) {
             startMinutes.push(i - count);
-            i = i - count + 1;
-            count = 0;
+            count = count - 1;
         }
     }
 
@@ -173,7 +129,7 @@ function search(busyTime, duration) {
  */
 exports.getAppropriateMoment = function (schedule, duration, workingHours) {
     console.info(schedule, duration, workingHours);
-    var utc = getUtc(workingHours.from);
+    var bankTimeZone = getTimeZone(workingHours.from);
     var lastTry = 0;
 
     /**
@@ -185,14 +141,15 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
       В итоге получим массив, где 1 будут означать минуты, когда возможен
       грабеж.
      */
-    var busyTime = [];
+    var busyMinutes = [];
     for (var i = 0; i < END_OF_WEDNESDAY; i++) {
-        busyTime.push(1);
+        busyMinutes.push(1);
     }
-    doBusy(schedule.Danny, busyTime, utc);
-    doBusy(schedule.Linus, busyTime, utc);
-    doBusy(schedule.Rusty, busyTime, utc);
-    doClose(workingHours, busyTime, utc);
+    setBusyMinutes(schedule.Danny, busyMinutes, bankTimeZone);
+    setBusyMinutes(schedule.Linus, busyMinutes, bankTimeZone);
+    setBusyMinutes(schedule.Rusty, busyMinutes, bankTimeZone);
+    setCloseMinutes(workingHours, busyMinutes, bankTimeZone);
+    var appropriateMinutes = searchSuccessMinutes(busyMinutes, duration);
 
     return {
 
@@ -201,11 +158,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          * @returns {Boolean}
          */
         exists: function () {
-            if (search(busyTime, duration).length !== 0) {
-                return true;
-            }
-
-            return false;
+            return (appropriateMinutes.length !== 0);
         },
 
         /**
@@ -216,19 +169,19 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          * @returns {String}
          */
         format: function (template) {
-            if (search(busyTime, duration).length === 0) {
-
+            if (!this.exists()) {
                 return '';
             }
-            var rightTime = search(busyTime, duration)[lastTry] + 1;
-            var day = Math.floor(rightTime / (MINUTES_IN_DAY));
-            var hours = Math.floor((rightTime - MINUTES_IN_DAY * day) / 60);
-            var minutes = (rightTime - MINUTES_IN_DAY * day) % 60;
+            var rightMinute = appropriateMinutes[lastTry] + 1;
+            var day = Math.floor(rightMinute / (MINUTES_IN_DAY));
+            var minutesFromMidnight = rightMinute - MINUTES_IN_DAY * day;
+            var hours = Math.floor(minutesFromMidnight / 60);
+            var minutes = minutesFromMidnight % 60;
 
             return template
-                .replace('%DD', ['ПН', 'ВТ', 'СР'][day])
-                .replace('%HH', showTime(hours))
-                .replace('%MM', showTime(minutes));
+                .replace('%DD', DAYS[day])
+                .replace('%HH', formatTime(hours))
+                .replace('%MM', formatTime(minutes));
         },
 
         /**
@@ -237,20 +190,16 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          * @returns {Boolean}
          */
         tryLater: function () {
-            var flag = 0;
-            var tries = search(busyTime, duration);
-            for (var j = lastTry; j < tries.length; j++) {
-                if (tries[j] - tries[lastTry] > 29) {
+            var isTrue = false;
+            for (var j = lastTry; j < appropriateMinutes.length; j++) {
+                if (appropriateMinutes[j] - appropriateMinutes[lastTry] >= 30) {
                     lastTry = j;
-                    flag = 1;
+                    isTrue = true;
                     break;
                 }
             }
-            if (flag === 0) {
-                return false;
-            }
 
-            return true;
+            return isTrue;
         }
     };
 };
