@@ -25,7 +25,6 @@ function formatTime(count) {
  * @returns {Integer} Сдвиг времени
  */
 function getTimeZone(time) {
-
     return Number(time.split('+')[1].slice(-1));
 }
 
@@ -46,31 +45,39 @@ function parseDay(time) {
 /**
 * @param {String} time - Строка в которой написано время
 * @param {Integer} bankTimeZone - Временная зона банка
-* @returns {Integer} Количество минут, прошедших с понедельника
+* @returns {Integer} utcDate
 */
-function minutesPassed(time, bankTimeZone) {
+function getDate(time, bankTimeZone) {
     var timeZone = getTimeZone(time);
     var parsedTime = time.match(/\d\d:\d\d/)[0];
     var hours = Number(parsedTime.split(':')[0]) - timeZone + bankTimeZone;
     var minutes = Number(parsedTime.split(':')[1]);
     var day = parseDay(time);
 
-    return (Date.UTC(2016, 1, day, hours, minutes) - START_OF_WEEK) / MS_IN_MINUTE;
+    return Date.UTC(2016, 1, day, hours, minutes);
+}
+
+/**
+* @param {Integer} utcDate
+* @returns {Integer} Количество минут, прошедших с понедельника
+*/
+function minutesPassed(utcDate) {
+    return (utcDate - START_OF_WEEK) / MS_IN_MINUTE;
 }
 
 /**
 * Занятые минуты грабителя записывает нулями
 * @param {Array} robberSchedule - массив объектов(Записано расписание для конкретного вора)
-* @param {Array} busyMinutes - Изменяемый массив
+* @param {Array} freeMinutes - Изменяемый массив
 * @param {Integer} bankTimeZone - Временная зона банка
 */
-function setBusyMinutes(robberSchedule, busyMinutes, bankTimeZone) {
+function setBusyMinutes(robberSchedule, freeMinutes, bankTimeZone) {
     for (var i = 0; i < robberSchedule.length; i++) {
-        var startOfBusy = minutesPassed(robberSchedule[i].from, bankTimeZone);
-        var endOfBusy = Math.min(minutesPassed(robberSchedule[i].to, bankTimeZone),
+        var startOfBusy = minutesPassed(getDate(robberSchedule[i].from, bankTimeZone));
+        var endOfBusy = Math.min(minutesPassed(getDate(robberSchedule[i].to, bankTimeZone)),
                        END_OF_WEDNESDAY);
         for (var j = startOfBusy; j < endOfBusy; j++) {
-            busyMinutes[j] = 0;
+            freeMinutes[j] = 0;
         }
     }
 }
@@ -79,33 +86,34 @@ function setBusyMinutes(robberSchedule, busyMinutes, bankTimeZone) {
 Зануляет минуты когда банк закрыт. На каждом шаге цикла зануляет минуты
 для понедельника, вторника и среды.
 * @param {Array} workingHours - Время работы банка
-* @param {Array} busyMinutes - Изменяемый массив
+* @param {Array} freeMinutes - Изменяемый массив
 * @param {Integer} bankTimeZone - Временная зона банка
 */
-function setCloseMinutes(workingHours, busyMinutes, bankTimeZone) {
-    for (var i = 0; i < minutesPassed(workingHours.from, bankTimeZone); i++) {
-        busyMinutes[i] = 0;
-        busyMinutes[i + MINUTES_IN_DAY] = 0;
-        busyMinutes[i + MINUTES_IN_DAY * 2] = 0;
+function setCloseMinutes(workingHours, freeMinutes, bankTimeZone) {
+    for (var i = 0; i < minutesPassed(getDate(workingHours.from, bankTimeZone)); i++) {
+        freeMinutes[i] = 0;
+        freeMinutes[i + MINUTES_IN_DAY] = 0;
+        freeMinutes[i + MINUTES_IN_DAY * 2] = 0;
     }
-    for (var j = minutesPassed(workingHours.to, bankTimeZone); j < MINUTES_IN_DAY; j++) {
-        busyMinutes[j] = 0;
-        busyMinutes[j + MINUTES_IN_DAY] = 0;
-        busyMinutes[j + MINUTES_IN_DAY * 2] = 0;
+    for (var j = minutesPassed(getDate(workingHours.to, bankTimeZone)); j < MINUTES_IN_DAY; j++) {
+        freeMinutes[j] = 0;
+        freeMinutes[j + MINUTES_IN_DAY] = 0;
+        freeMinutes[j + MINUTES_IN_DAY * 2] = 0;
     }
 }
 
 /**
 * Находит минуты с которых возможно ограбить банк
-* @param {Array} busyMinutes - массив занятости
+* @param {Array} freeMinutes - массив занятости
 * @param {Integer} duration - длительность ограбления
 * @returns {Array} startMinutes
 */
-function searchSuccessMinutes(busyMinutes, duration) {
+function searchSuccessMinutes(freeMinutes, duration) {
     var startMinutes = [];
     var count = 0;
-    for (var i = 0; i < busyMinutes.length; i++) {
-        if (busyMinutes[i] === 1) {
+
+    for (var i = 0; i < freeMinutes.length; i++) {
+        if (freeMinutes[i] === 1) {
             count = count + 1;
         } else {
             count = 0;
@@ -141,15 +149,15 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
       В итоге получим массив, где 1 будут означать минуты, когда возможен
       грабеж.
      */
-    var busyMinutes = [];
+    var freeMinutes = [];
     for (var i = 0; i < END_OF_WEDNESDAY; i++) {
-        busyMinutes.push(1);
+        freeMinutes.push(1);
     }
-    setBusyMinutes(schedule.Danny, busyMinutes, bankTimeZone);
-    setBusyMinutes(schedule.Linus, busyMinutes, bankTimeZone);
-    setBusyMinutes(schedule.Rusty, busyMinutes, bankTimeZone);
-    setCloseMinutes(workingHours, busyMinutes, bankTimeZone);
-    var appropriateMinutes = searchSuccessMinutes(busyMinutes, duration);
+    setBusyMinutes(schedule.Danny, freeMinutes, bankTimeZone);
+    setBusyMinutes(schedule.Linus, freeMinutes, bankTimeZone);
+    setBusyMinutes(schedule.Rusty, freeMinutes, bankTimeZone);
+    setCloseMinutes(workingHours, freeMinutes, bankTimeZone);
+    var appropriateMinutes = searchSuccessMinutes(freeMinutes, duration);
 
     return {
 
