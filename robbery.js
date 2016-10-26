@@ -32,7 +32,7 @@ function getTimeZone(time) {
  * @param {String} time
  * @returns {Integer} Номер дня недели в строке
  */
-function parseDay(time) {
+function getDay(time) {
     var day = time.split(' ')[0];
     var dayIndex = DAYS.indexOf(day);
     if (dayIndex === -1) {
@@ -49,10 +49,10 @@ function parseDay(time) {
 */
 function getDate(time, bankTimeZone) {
     var timeZone = getTimeZone(time);
-    var parsedTime = time.match(/\d\d:\d\d/)[0];
+    var parsedTime = time.match(/\d{2}:\d{2}/)[0];
     var hours = Number(parsedTime.split(':')[0]) - timeZone + bankTimeZone;
     var minutes = Number(parsedTime.split(':')[1]);
-    var day = parseDay(time);
+    var day = getDay(time);
 
     return Date.UTC(2016, 1, day, hours, minutes);
 }
@@ -90,15 +90,13 @@ function setBusyMinutes(robberSchedule, freeMinutes, bankTimeZone) {
 * @param {Integer} bankTimeZone - Временная зона банка
 */
 function setCloseMinutes(workingHours, freeMinutes, bankTimeZone) {
-    for (var i = 0; i < minutesPassed(getDate(workingHours.from, bankTimeZone)); i++) {
-        freeMinutes[i] = 0;
-        freeMinutes[i + MINUTES_IN_DAY] = 0;
-        freeMinutes[i + MINUTES_IN_DAY * 2] = 0;
-    }
-    for (var j = minutesPassed(getDate(workingHours.to, bankTimeZone)); j < MINUTES_IN_DAY; j++) {
-        freeMinutes[j] = 0;
-        freeMinutes[j + MINUTES_IN_DAY] = 0;
-        freeMinutes[j + MINUTES_IN_DAY * 2] = 0;
+    for (var i = 0; i < MINUTES_IN_DAY; i++) {
+        if (i < minutesPassed(getDate(workingHours.from, bankTimeZone)) ||
+            i > minutesPassed(getDate(workingHours.to, bankTimeZone))) {
+            freeMinutes[i] = 0;
+            freeMinutes[i + MINUTES_IN_DAY] = 0;
+            freeMinutes[i + MINUTES_IN_DAY * 2] = 0;
+        }
     }
 }
 
@@ -119,7 +117,7 @@ function searchSuccessMinutes(freeMinutes, duration) {
             count = 0;
         }
         if (count === duration) {
-            startMinutes.push(i - count);
+            startMinutes.push(i - count + 1);
             count = count - 1;
         }
     }
@@ -139,16 +137,6 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
     console.info(schedule, duration, workingHours);
     var bankTimeZone = getTimeZone(workingHours.from);
     var lastTry = 0;
-
-    /**
-      Создаем массив из 24*60*3 чисел.
-      Цифра 0 в индексе i означает, что в минуту i грабитель занят.
-      Изначально заполняем массив единицами. Затем интервалы, когда первый
-      грабитель занят заменяем на нули. То же проделываем со вторым и третьим.
-      Затем минуты, когда банк закрыт также зануляем.
-      В итоге получим массив, где 1 будут означать минуты, когда возможен
-      грабеж.
-     */
     var freeMinutes = [];
     for (var i = 0; i < END_OF_WEDNESDAY; i++) {
         freeMinutes.push(1);
@@ -180,9 +168,8 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
             if (!this.exists()) {
                 return '';
             }
-            var rightMinute = appropriateMinutes[lastTry] + 1;
-            var day = Math.floor(rightMinute / (MINUTES_IN_DAY));
-            var minutesFromMidnight = rightMinute - MINUTES_IN_DAY * day;
+            var day = Math.floor(appropriateMinutes[lastTry] / (MINUTES_IN_DAY));
+            var minutesFromMidnight = appropriateMinutes[lastTry] - MINUTES_IN_DAY * day;
             var hours = Math.floor(minutesFromMidnight / 60);
             var minutes = minutesFromMidnight % 60;
 
