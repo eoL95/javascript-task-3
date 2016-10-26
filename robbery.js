@@ -92,7 +92,7 @@ function setBusyMinutes(robberSchedule, freeMinutes, bankTimeZone) {
 function setCloseMinutes(workingHours, freeMinutes, bankTimeZone) {
     for (var i = 0; i < MINUTES_IN_DAY; i++) {
         if (i < minutesPassed(getDate(workingHours.from, bankTimeZone)) ||
-            i > minutesPassed(getDate(workingHours.to, bankTimeZone))) {
+            i >= minutesPassed(getDate(workingHours.to, bankTimeZone))) {
             freeMinutes[i] = 0;
             freeMinutes[i + MINUTES_IN_DAY] = 0;
             freeMinutes[i + MINUTES_IN_DAY * 2] = 0;
@@ -106,7 +106,7 @@ function setCloseMinutes(workingHours, freeMinutes, bankTimeZone) {
 * @param {Integer} duration - длительность ограбления
 * @returns {Array} startMinutes
 */
-function searchSuccessMinutes(freeMinutes, duration) {
+function findSuccessMinutes(freeMinutes, duration) {
     var startMinutes = [];
     var count = 0;
 
@@ -145,7 +145,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
     setBusyMinutes(schedule.Linus, freeMinutes, bankTimeZone);
     setBusyMinutes(schedule.Rusty, freeMinutes, bankTimeZone);
     setCloseMinutes(workingHours, freeMinutes, bankTimeZone);
-    var appropriateMinutes = searchSuccessMinutes(freeMinutes, duration);
+    var appropriateMinutes = findSuccessMinutes(freeMinutes, duration);
 
     return {
 
