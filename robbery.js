@@ -9,15 +9,15 @@ var DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 
 /**
  * Для вывода времени, если часы или минуты меньше 10
- * @param {Integer} count - количество часов или минут
+ * @param {Integer} num - количество часов или минут
  * @returns {String} Например '01' если задано число 1
  */
-function formatTime(count) {
-    if (count < 10) {
-        return '0' + count.toString();
+function formatTime(num) {
+    if (num < 10) {
+        return '0' + num.toString();
     }
 
-    return count.toString();
+    return num.toString();
 }
 
 /**
@@ -35,6 +35,7 @@ function getTimeZone(time) {
 function getDay(time) {
     var day = time.split(' ')[0];
     var dayIndex = DAYS.indexOf(day);
+
     if (dayIndex === -1) {
         return 1;
     }
@@ -74,8 +75,11 @@ function minutesPassed(utcDate) {
 function setBusyMinutes(robberSchedule, freeMinutes, bankTimeZone) {
     for (var i = 0; i < robberSchedule.length; i++) {
         var startOfBusy = minutesPassed(getDate(robberSchedule[i].from, bankTimeZone));
-        var endOfBusy = Math.min(minutesPassed(getDate(robberSchedule[i].to, bankTimeZone)),
-                       END_OF_WEDNESDAY);
+        var endOfBusy = Math.min(
+           minutesPassed(getDate(robberSchedule[i].to, bankTimeZone)),
+           END_OF_WEDNESDAY
+        );
+
         for (var j = startOfBusy; j < endOfBusy; j++) {
             freeMinutes[j] = 0;
         }
@@ -90,9 +94,11 @@ function setBusyMinutes(robberSchedule, freeMinutes, bankTimeZone) {
 * @param {Integer} bankTimeZone - Временная зона банка
 */
 function setCloseMinutes(workingHours, freeMinutes, bankTimeZone) {
+    var startOfWorkDay = minutesPassed(getDate(workingHours.from, bankTimeZone));
+    var endOfWorkDay = minutesPassed(getDate(workingHours.to, bankTimeZone));
+
     for (var i = 0; i < MINUTES_IN_DAY; i++) {
-        if (i < minutesPassed(getDate(workingHours.from, bankTimeZone)) ||
-            i >= minutesPassed(getDate(workingHours.to, bankTimeZone))) {
+        if (i < startOfWorkDay || i >= endOfWorkDay) {
             freeMinutes[i] = 0;
             freeMinutes[i + MINUTES_IN_DAY] = 0;
             freeMinutes[i + MINUTES_IN_DAY * 2] = 0;
@@ -106,7 +112,7 @@ function setCloseMinutes(workingHours, freeMinutes, bankTimeZone) {
 * @param {Integer} duration - длительность ограбления
 * @returns {Array} startMinutes
 */
-function findSuccessMinutes(freeMinutes, duration) {
+function findAppropriateMinutes(freeMinutes, duration) {
     var startMinutes = [];
     var count = 0;
 
@@ -138,14 +144,18 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
     var bankTimeZone = getTimeZone(workingHours.from);
     var lastTry = 0;
     var freeMinutes = [];
+
     for (var i = 0; i < END_OF_WEDNESDAY; i++) {
         freeMinutes.push(1);
     }
-    setBusyMinutes(schedule.Danny, freeMinutes, bankTimeZone);
-    setBusyMinutes(schedule.Linus, freeMinutes, bankTimeZone);
-    setBusyMinutes(schedule.Rusty, freeMinutes, bankTimeZone);
+    for (var name in schedule) {
+        if (schedule.hasOwnProperty(name)) {
+            setBusyMinutes(schedule[name], freeMinutes, bankTimeZone);
+        }
+    }
+
     setCloseMinutes(workingHours, freeMinutes, bankTimeZone);
-    var appropriateMinutes = findSuccessMinutes(freeMinutes, duration);
+    var appropriateMinutes = findAppropriateMinutes(freeMinutes, duration);
 
     return {
 
@@ -168,6 +178,7 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
             if (!this.exists()) {
                 return '';
             }
+
             var day = Math.floor(appropriateMinutes[lastTry] / (MINUTES_IN_DAY));
             var minutesFromMidnight = appropriateMinutes[lastTry] - MINUTES_IN_DAY * day;
             var hours = Math.floor(minutesFromMidnight / 60);
@@ -185,16 +196,15 @@ exports.getAppropriateMoment = function (schedule, duration, workingHours) {
          * @returns {Boolean}
          */
         tryLater: function () {
-            var isTrue = false;
             for (var j = lastTry; j < appropriateMinutes.length; j++) {
                 if (appropriateMinutes[j] - appropriateMinutes[lastTry] >= 30) {
                     lastTry = j;
-                    isTrue = true;
-                    break;
+
+                    return true;
                 }
             }
 
-            return isTrue;
+            return false;
         }
     };
 };
