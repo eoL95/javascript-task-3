@@ -9,15 +9,15 @@ var DAYS = ['ПН', 'ВТ', 'СР', 'ЧТ', 'ПТ', 'СБ', 'ВС'];
 
 /**
  * Для вывода времени, если часы или минуты меньше 10
- * @param {Integer} num - количество часов или минут
+ * @param {Integer} number - количество часов или минут
  * @returns {String} Например '01' если задано число 1
  */
-function formatTime(num) {
-    if (num < 10) {
-        return '0' + num.toString();
+function formatTime(number) {
+    if (number < 10) {
+        return '0' + number.toString();
     }
 
-    return num.toString();
+    return number.toString();
 }
 
 /**
